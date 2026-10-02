@@ -18,6 +18,8 @@ export type ModuleMeta = {
   actions: string[]
   actionTargets: Record<string, string>
   metrics: string[]
+  // 为 true 时状态只允许「逐段向前」：跳段、倒序、重复都会被挡下。
+  linearFlow?: boolean
 }
 
 export type PageResult = {
