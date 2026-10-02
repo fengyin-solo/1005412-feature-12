@@ -82,7 +82,7 @@ import {
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('report')
-const columns = ["上报编号", "所属隐患点", "险情类别", "发现时间", "上报层级", "处置意见", "反馈时间", "上报状态"]
+const columns = ["上报编号", "所属隐患点", "险情类别", "涉及户数", "发现时间", "上报层级", "处置意见", "反馈时间", "上报状态"]
 const actions = ["确认上报", "登记处置", "退回补充"]
 const statuses = ["待上报", "已上报", "已处置", "已退回"]
 const stats = [{"label": "待上报险情", "value": 0}, {"label": "已上报险情", "value": 0}, {"label": "已处置险情", "value": 0}]

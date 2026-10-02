@@ -6,10 +6,28 @@
         <p class="page-desc">维护搬迁安置单，围绕搬迁编号、所属隐患点、涉及户数、安置方式做登记、筛选与状态流转。</p>
       </div>
       <div class="page-actions">
-        <button class="btn primary" type="button" @click="openCreate">登记搬迁安置单</button>
-        <button class="btn" type="button" @click="exportRows">导出避险搬迁清单</button>
+        <button class="btn primary" type="button" @click="toggleCreate">登记搬迁安置单</button>
+        <button class="btn" type="button" @click="exportRows">按安置方式导出分送材料</button>
       </div>
     </header>
+
+    <form v-if="showCreate" class="create-panel" @submit.prevent="submitCreate">
+      <label v-for="field in createFields" :key="field.key" class="filter-item">
+        <span>{{ field.label }}</span>
+        <select v-if="field.key === '安置方式'" v-model="createForm[field.key]">
+          <option value="" disabled>请选择安置方式</option>
+          <option v-for="method in methods" :key="method" :value="method">{{ method }}</option>
+        </select>
+        <input
+          v-else
+          v-model="createForm[field.key]"
+          :type="field.key === '签订日期' ? 'date' : 'text'"
+          :placeholder="`请输入${field.label}`"
+        />
+      </label>
+      <button class="btn primary" type="submit">提交登记</button>
+      <button class="btn ghost" type="button" @click="toggleCreate">取消</button>
+    </form>
 
     <div class="stat-row">
       <article v-for="item in stats" :key="item.label" class="stat-card">
@@ -65,6 +83,7 @@
 
     <footer class="page-foot">
       <span>共 {{ total }} 条避险搬迁记录</span>
+      <span v-if="noticeMessage" class="notice-text">{{ noticeMessage }}</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
     </footer>
   </section>
@@ -74,9 +93,12 @@
 import { computed, onMounted, ref } from 'vue'
 
 import {
-  downloadEntries,
+  RELOCATION_METHODS,
+  downloadRelocationSheets,
   listEntries,
   moduleMeta,
+  parseHouseholds,
+  registerRelocation,
   runAction as applyAction,
 } from '@/api/local-service'
 import type { EntryRow } from '@/data/types'
@@ -85,13 +107,25 @@ const meta = moduleMeta('relocate')
 const columns = ["搬迁编号", "所属隐患点", "涉及户数", "安置方式", "安置地点", "签订日期", "完成日期", "搬迁状态"]
 const actions = ["确认签订", "开始搬迁", "确认完成"]
 const statuses = ["待签订", "已签订", "搬迁中", "已完成"]
-const stats = [{"label": "待签订户数", "value": 0}, {"label": "搬迁中户数", "value": 0}, {"label": "已安置户数", "value": 0}]
+const methods = RELOCATION_METHODS
+const createFields = [
+  { key: "搬迁编号", label: "搬迁编号" },
+  { key: "所属隐患点", label: "所属隐患点" },
+  { key: "涉及户数", label: "涉及户数" },
+  { key: "安置方式", label: "安置方式" },
+  { key: "安置地点", label: "安置地点" },
+  { key: "签订日期", label: "签订日期" },
+]
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
+const noticeMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+const showCreate = ref(false)
+const createForm = ref<Record<string, string>>(blankForm())
+
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
     status,
@@ -99,26 +133,69 @@ const statusSummary = computed(() =>
   })),
 )
 
+// 户数指标按涉及户数求和，精度不对的历史数据不计入。
+const stats = computed(() => {
+  const sumHouseholds = (status: string) =>
+    rows.value
+      .filter((row) => String(row.status) === status)
+      .reduce((sum, row) => sum + (parseHouseholds(row['涉及户数']) ?? 0), 0)
+  return [
+    { label: '待签订户数', value: sumHouseholds('待签订') },
+    { label: '搬迁中户数', value: sumHouseholds('搬迁中') },
+    { label: '已安置户数', value: sumHouseholds('已完成') },
+  ]
+})
+
+function blankForm(): Record<string, string> {
+  return { 搬迁编号: '', 所属隐患点: '', 涉及户数: '', 安置方式: '', 安置地点: '', 签订日期: '' }
+}
+
+function toggleCreate() {
+  showCreate.value = !showCreate.value
+  errorMessage.value = ''
+  if (showCreate.value) {
+    createForm.value = blankForm()
+  }
+}
+
+function submitCreate() {
+  errorMessage.value = ''
+  noticeMessage.value = ''
+  const result = registerRelocation(createForm.value)
+  if (!result.ok) {
+    errorMessage.value = result.message
+    return
+  }
+  noticeMessage.value = result.message
+  showCreate.value = false
+  createForm.value = blankForm()
+  reload()
+}
+
 function resetFilters() {
   filters.value = {}
   reload()
 }
 
-function exportRows() {
-  downloadEntries(meta.key)
-}
-
-function openCreate() {
-  errorMessage.value = '搬迁安置单登记入口尚未接入审批流'
+async function exportRows() {
+  errorMessage.value = ''
+  noticeMessage.value = ''
+  try {
+    noticeMessage.value = await downloadRelocationSheets()
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '按安置方式导出失败'
+  }
 }
 
 function runAction(action: string, row: EntryRow) {
   errorMessage.value = ''
+  noticeMessage.value = ''
   const result = applyAction(meta.key, Number(row.id), action)
   if (!result.ok) {
     errorMessage.value = result.message
     return
   }
+  noticeMessage.value = result.message
   reload()
 }
 

@@ -67,5 +67,12 @@ npm run build
   `frontend/src/api/local-service.ts`。
 - 字段、状态、动作与流转目标集中在 `frontend/src/data/modules.ts`；示例数据在
   `frontend/src/data/seed.ts`。
-- 状态流转只允许在 `local-service.ts` 里改，页面组件不做业务判断。
+- 状态流转只允许在 `local-service.ts` 里改，页面组件不做业务判断。元数据里标了
+  `strictSequence: true` 的模块（目前是避险搬迁）状态只能一段一段往前推，倒序与跨段改动一律挡下。
+- 避险搬迁的安置单按安置方式拆分导出分送乡镇：每份清单列全搬迁编号、涉及户数、安置地点、
+  安置方式，文件名带安置方式与导出日期；没有记录的安置方式给说明文件，不出空文件。同一搬迁
+  编号重复导出只认第一次的结果（台账存在 `geohazard-patrol:relocate-exports`），首次导出的
+  结论会同步到险情上报待办，清单里冒出「已安置户」，两处涉及户数是同一套。
+- 登记搬迁安置单时涉及户数必须是正整数，精度不对直接退回、不落库；涉及户数与安置地点同时
+  有问题时先判涉及户数。
 - 想回到初始数据：清掉浏览器里 `geohazard-patrol:entries` 这一项，或调用 `resetModule(模块)`。
